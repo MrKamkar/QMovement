@@ -72,18 +72,22 @@ _Note: Default properties perfectly match original QuakeWorld values. If you do 
 
 The plugin features built-in `sv_*` console commands that allow you to tweak physics live during gameplay, preserving the original engine's nomenclature. To use them, press the tilde `~` key during the game and type a command with a value (e.g., `sv_gravity 800`). Typing just the command will display its current value on the screen.
 
-- `sv_gravity` - **[Default: 800]** Sets gravity (lower value = moon jump).
-- `sv_maxspeed` - **[Default: 320 in QW / 250 in CS]** Maximum running speed on flat ground holding W.
-- `sv_airaccelerate` - **[Default: 0.7 in QW / 10-100 on Surf servers]** The most important value for Bhop/Surfing. Determines how strongly the player can change flight direction while airborne.
-- `sv_accelerate` - **[Default: 10]** The force with which the player accelerates from a standstill on the ground.
-- `sv_friction` - **[Default: 6 in QW / 4 in CS]** Ground friction. Setting this to 0 creates ice, higher values instantly stop the player on the ground.
-- `sv_jumpspeed` - **[Default: 270]** Upward velocity applied when jumping (jump height).
-- `sv_stopspeed` - **[Default: 100]** Speed below which the engine applies full instantaneous static friction to prevent micro-sliding.
-- `sv_stepsize` - **[Default: 18]** Maximum "step" height (in units) the player will automatically walk up without jumping.
-- `sv_airspeedcap` - **[Default: 30]** Hidden Quake engine feature. Maximum sideways vector velocity considered during air-strafing.
-- `sv_maxvelocity` - **[Default: 2000]** Emergency cap - absolute highest physical velocity (e.g. from explosions/bhop) to prevent wall clipping.
-- `sv_autobhop` - **[Default: 0]** Set to `1` (or check in Data Asset) to make the player automatically hop off the ground by holding the jump key, avoiding the need for perfect mouse-wheel timing.
-- `noclip` - Ghost mode. Character ignores walls and can freely fly around the map. Typing it again turns physics back on.
+- `sv_gravity` - **[Default: 800]** Sets world gravity (lower = moon jump).
+- `sv_maxspeed` - **[Default: 320 in QW / 250 in CS]** Maximum running speed on flat ground.
+- `sv_airaccelerate` - **[Default: 10]** Air control strength. High values (10-100) enable Bhop/Surf.
+- `sv_accelerate` - **[Default: 10]** Ground acceleration force.
+- `sv_friction` - **[Default: 4]** Ground friction. Set to 0 for ice, higher for instant stops.
+- `sv_jumpspeed` - **[Default: 268.3]** Upward velocity applied on jump.
+- `sv_stopspeed` - **[Default: 100]** Speed threshold for applying static friction.
+- `sv_stepsize` - **[Default: 18]** Maximum height (in units) for automatic step-up.
+- `sv_airspeedcap` - **[Default: 30]** Max sideways velocity cap during air-strafing.
+- `sv_maxvelocity` - **[Default: 2000]** Hard physical velocity limit.
+- `sv_autobhop` - **[0/1]** Enable auto-jumping by holding the jump key.
+- `sv_disablebhopcap` - **[0/1]** Disable the 1.7x speed cap found in classic HL/CS.
+- `sv_camerapunch` - **[0/1]** Enable/disable camera impact shake on landing.
+- `sv_cameraroll` - **[0/1]** Enable/disable camera leaning during strafing.
+- `cl_bob` - **[0/1]** Enable/disable view bobbing (head bob) while moving.
+- `noclip` - Toggle ghost mode (fly through walls).
 
 ---
 
