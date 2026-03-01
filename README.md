@@ -10,9 +10,21 @@ It fully supports classic mechanics without compromises:
 - Strafe-jumping and Air-strafing
 - Surfing (sliding on curved walls)
 - Ladder climbing and orientation-independent jump-off
+- Water movement and swimming
+- Conveyor belts (using BaseVelocity)
 - **Crouch-Jumping (Duck-Jump)** with authentic mid-air origin behavior
 - **Delayed Ground Crouching** (TIME_TO_DUCK) matching GoldSrc delay
 - Fully data-driven view heights and physics parameters
+
+### 🌟 Gameplay Showcase
+
+|              Bunnyhopping               |            Surfing             |
+| :-------------------------------------: | :----------------------------: |
+| ![Bunnyhopping](Images/Bunnyhoping.gif) | ![Surfing](Images/Surfing.gif) |
+
+|       Ladder Climbing        |       Water Movement       |              Conveyor Belts               |
+| :--------------------------: | :------------------------: | :---------------------------------------: |
+| ![Ladder](Images/Ladder.gif) | ![Water](Images/Water.gif) | ![Conveyor Belt](Images/ConveyorBelt.gif) |
 
 ## ⚠️ Important Prerequisite (For Blueprint-Only Projects)
 
