@@ -1,0 +1,22 @@
+# .gitignore dla Unreal Engine Plugin
+
+# Foldery tymczasowe silnika
+Binaries/
+Intermediate/
+Saved/
+
+# Pliki środowisk IDE
+.vs/
+.idea/
+.vscode/
+
+# Pliki projektowe (powinny być trzymane po stronie gry, a nie w pluginie)
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.xcworkspace
+*.xcodeproj
+
+*.DS_Store
