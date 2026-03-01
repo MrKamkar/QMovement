@@ -111,6 +111,10 @@ public:
 	UFUNCTION(Exec) void sv_airspeedcap(const FString& Args);
 	UFUNCTION(Exec) void sv_maxvelocity(const FString& Args);
 	UFUNCTION(Exec) void sv_autobhop(const FString& Args);
+	UFUNCTION(Exec) void sv_disablebhopcap(const FString& Args);
+	UFUNCTION(Exec) void sv_camerapunch(const FString& Args);
+	UFUNCTION(Exec) void sv_cameraroll(const FString& Args);
+	UFUNCTION(Exec) void cl_bob(const FString& Args);
 	UFUNCTION(Exec) void noclip();
 
 private:

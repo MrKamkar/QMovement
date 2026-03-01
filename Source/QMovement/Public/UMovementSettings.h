@@ -24,13 +24,13 @@ public:
 	// Speed
 	// =========================================================================
 
-	/** Maximum ground movement speed (QW = 320, CS 1.6 = 250) */
+	/** Maximum ground movement speed (HL = 320, CS 1.6 = 250) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed")
 	float MaxSpeed = 320.0f;
 
-	/** Jump velocity added on jump (QW = 270, CS 1.6 = 268.3) */
+	/** Jump velocity added on jump (QW = 270, CS 1.6 = 268.328) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed")
-	float JumpSpeed = 270.0f;
+	float JumpSpeed = 268.328157f;
 
 	/** Spectator fly speed */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Speed")
@@ -54,15 +54,15 @@ public:
 
 	/** Ground friction (QW = 6, CS 1.6 = 4) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
-	float Friction = 6.0f;
+	float Friction = 4.0f;
 
 	/** Ground acceleration (CS 1.6 = 10) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
 	float Accelerate = 10.0f;
 
-	/** Air acceleration — THE key value for bhop/air-strafe (QW = 0.7, CS 1.6 = 12) */
+	/** Air acceleration — THE key value for bhop/air-strafe (QW = 0.7, CS 1.6 = 10) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
-	float AirAccelerate = 0.7f;
+	float AirAccelerate = 10.0f;
 
 	/** Water acceleration */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Physics")
@@ -96,6 +96,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Geometry")
 	float CapsuleHalfHeightCrouch = 18.0f;
 
+	/** Camera height relative to the player origin when standing (CS 1.6 = ~22-28) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Geometry")
+	float ViewHeight = 22.0f;
+
+	/** Camera height relative to the player origin when crouching (CS 1.6 = ~9-12) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Geometry")
+	float ViewHeightCrouch = 9.0f;
+
 	// =========================================================================
 	// Advanced
 	// =========================================================================
@@ -122,7 +130,36 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gameplay")
 	bool bAutoBunnyHop = false;
 
+	/** Disable the default CS 1.6 / HL 1.7x bhop speed cap */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gameplay")
+	bool bDisableBhopCap = true;
+
 	/** Number of jumps allowed before touching the ground (1 = normal, 2 = double jump) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gameplay", meta = (ClampMin = "1"))
 	int32 MaxJumps = 1;
+
+	// =========================================================================
+	// Camera Animations
+	// =========================================================================
+
+	/** Enable the CS 1.6 style landing camera punch (impact shake) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	bool bEnableCameraPunch = true;
+
+	/** Enable the CS 1.6 style strafe camera roll (leaning) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	bool bEnableCameraRoll = true;
+
+	/** Enable head-bobbing while moving */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	bool bEnableBobbing = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float BobAmount = 0.005f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float BobSpeed = 7.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	float BobUp = 0.5f;
 };

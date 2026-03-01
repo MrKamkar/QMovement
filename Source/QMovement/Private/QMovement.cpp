@@ -1,6 +1,6 @@
-// QMovement.cpp — QuakeWorld pmove.c adapted to UE5 C++
+// QMovement.cpp — GoldSrc movement adapts to UE5 C++
+// Version 1.1 | Developed by MrKamkar (https://github.com/MrKamkar)
 // Copyright (C) 1996-1997 Id Software, Inc. (GPL v2)
-// Ported with UE5 type/trace adaptations. Parameters read from UMovementSettings.
 
 #include "QMovement.h"
 #include "UMovementSettings.h"
@@ -9,6 +9,29 @@
 #include "Engine/OverlapResult.h"
 #include "CollisionQueryParams.h"
 #include "Components/PrimitiveComponent.h"
+
+// --------------------------------------------------------------------------
+// Valve's PM_GetRandomStuckOffsets array
+// --------------------------------------------------------------------------
+const FVector QMovement::rgv3tStuckTable[54] = {
+	FVector(0,0,0),    FVector(0,0,1),    FVector(0,0,2),    FVector(0,0,3),    FVector(0,0,4),    FVector(0,0,5),
+	FVector(-1,0,0),   FVector(1,0,0),    FVector(0,-1,0),   FVector(0,1,0),    FVector(-1,-1,0),  FVector(1,-1,0),
+	FVector(-1,1,0),   FVector(1,1,0),    FVector(-2,0,0),   FVector(2,0,0),    FVector(0,-2,0),   FVector(0,2,0),
+	FVector(-2,-2,0),  FVector(2,-2,0),   FVector(-2,2,0),   FVector(2,2,0),    FVector(-3,0,0),   FVector(3,0,0),
+	FVector(0,-3,0),   FVector(0,3,0),    FVector(-3,-3,0),  FVector(3,-3,0),   FVector(-3,3,0),   FVector(3,3,0),
+	FVector(-4,0,0),   FVector(4,0,0),    FVector(0,-4,0),   FVector(0,4,0),    FVector(-4,-4,0),  FVector(4,-4,0),
+	FVector(-4,4,0),   FVector(4,4,0),    FVector(-5,0,0),   FVector(5,0,0),    FVector(0,-5,0),   FVector(0,5,0),
+	FVector(-5,-5,0),  FVector(5,-5,0),   FVector(-5,5,0),   FVector(5,5,0),    FVector(-6,0,0),   FVector(6,0,0),
+	FVector(0,-6,0),   FVector(0,6,0),    FVector(-6,-6,0),  FVector(6,-6,0),   FVector(-6,6,0),   FVector(6,6,0)
+};
+
+int32 QMovement::GetRandomStuckOffsets(FVector& OutOffset)
+{
+	int32 idx = rgStuckLast++;
+	OutOffset = rgv3tStuckTable[idx % 54];
+	return (idx % 54);
+}
+
 
 // ============================================================================
 // Constructor
@@ -44,8 +67,17 @@ void QMovement::LoadSettings(const UMovementSettings* Settings)
 		Sv_MaxGroundUpVel    = Settings->MaxGroundUpVelocity;
 		Sv_MaxVelocity       = Settings->MaxVelocity;
 		Sv_AutoBunnyHop      = Settings->bAutoBunnyHop;
+		Sv_DisableBhopCap    = Settings->bDisableBhopCap;
+		Sv_EnableCameraPunch = Settings->bEnableCameraPunch;
+		Sv_EnableCameraRoll  = Settings->bEnableCameraRoll;
+		Sv_EnableBobbing     = Settings->bEnableBobbing;
+		Sv_BobAmount         = Settings->BobAmount;
+		Sv_BobSpeed          = Settings->BobSpeed;
+		Sv_BobUp             = Settings->BobUp;
 		Sv_MaxJumps          = Settings->MaxJumps;
 		Sv_CapsuleHalfHeightCrouch = Settings->CapsuleHalfHeightCrouch;
+		Sv_ViewHeight        = Settings->ViewHeight;
+		Sv_ViewHeightCrouch  = Settings->ViewHeightCrouch;
 	}
 
 	// Derive player mins/maxs from capsule dimensions
@@ -128,12 +160,15 @@ FQMoveTrace QMovement::PlayerMoveTrace(const FVector& Start, const FVector& End,
 	return Result;
 }
 
-bool QMovement::TestPlayerPosition(const FVector& Pos)
+bool QMovement::TestPlayerPosition(const FVector& Pos, float ShrinkScale)
 {
 	// Returns true if position is VALID (not stuck in solid)
 	if (!WorldPtr) return true;
 
-	FCollisionShape Shape = FCollisionShape::MakeCapsule(Sv_CapsuleRadius, Sv_CapsuleHalfHeight);
+	FCollisionShape Shape = FCollisionShape::MakeCapsule(
+		FMath::Max(1.0f, Sv_CapsuleRadius - ShrinkScale), 
+		FMath::Max(1.0f, Sv_CapsuleHalfHeight - ShrinkScale)
+	);
 	FCollisionQueryParams Params;
 	if (OwnerActor) Params.AddIgnoredActor(OwnerActor);
 
@@ -359,9 +394,9 @@ int32 QMovement::FlyMove()
 }
 
 // ============================================================================
-// PM_GroundMove — Player is on ground, with no upwards velocity
+// PM_WalkMove — Player is on ground, with no upwards velocity
 // ============================================================================
-void QMovement::GroundMove()
+void QMovement::WalkMove()
 {
 	Velocity.Z = 0.0f;
 	if (Velocity.IsNearlyZero())
@@ -441,7 +476,7 @@ usedown:
 // ============================================================================
 // PM_Friction — Handles both ground friction and water friction
 // ============================================================================
-void QMovement::ApplyFriction()
+void QMovement::Friction()
 {
 	if (WaterJumpTime > 0.0f || WaterLevel == 4)
 		return;
@@ -570,20 +605,21 @@ void QMovement::AirMove()
 		WishSpeed = Sv_MaxSpeed;
 	}
 
-	if (bOnGround)
+	if (bOnGround && WaterJumpTime == 0.0f)
 	{
 		Velocity.Z = 0.0f;
 		Accelerate(WishDir, WishSpeed, Sv_Accelerate);
-		Velocity.Z -= Sv_EntGravity * Sv_Gravity * FrameTime;
-		GroundMove();
+		Velocity.Z = 0.0f;
+		
+		WalkMove();
 	}
 	else
 	{
-		// Air path (bhop / air-strafe / surf)
-		AirAccelerate(WishDir, WishSpeed, Sv_AirAccelerate);
-
-		// Add gravity
-		Velocity.Z -= Sv_EntGravity * Sv_Gravity * FrameTime;
+		// Air path (bhop / air-strafe / surf / water jump)
+		if (WaterJumpTime == 0.0f)
+		{
+			AirAccelerate(WishDir, WishSpeed, Sv_AirAccelerate);
+		}
 
 		FlyMove();
 	}
@@ -748,7 +784,13 @@ void QMovement::CategorizePosition()
 	}
 	else
 	{
-		bOnGround   = true;
+		if (!bOnGround)
+		{
+			// Player just landed
+			bOnGround = true;
+			CheckFalling();
+		}
+
 		OnGroundEnt = Hit.GetActor() ? 1 : 0;
 
 		AActor* HitActor = Hit.GetActor();
@@ -777,9 +819,32 @@ void QMovement::CategorizePosition()
 }
 
 // ============================================================================
-// JumpButton
+// PreventMegaBunnyJumping
 // ============================================================================
-void QMovement::JumpButton()
+void QMovement::PreventMegaBunnyJumping()
+{
+	if (Sv_DisableBhopCap)
+		return;
+
+	constexpr float BUNNYJUMP_MAX_SPEED_FACTOR = 1.7f;
+	float MaxScaledSpeed = BUNNYJUMP_MAX_SPEED_FACTOR * Sv_MaxSpeed;
+
+	if (MaxScaledSpeed <= 0.0f)
+		return;
+
+	float Spd = Velocity.Size();
+
+	if (Spd <= MaxScaledSpeed)
+		return;
+
+	float Fraction = (MaxScaledSpeed / Spd) * 0.65f;
+	Velocity *= Fraction;
+}
+
+// ============================================================================
+// PM_Jump
+// ============================================================================
+void QMovement::Jump()
 {
 	if (bDead)
 	{
@@ -789,9 +854,6 @@ void QMovement::JumpButton()
 
 	if (WaterJumpTime > 0.0f)
 	{
-		WaterJumpTime -= FrameTime;
-		if (WaterJumpTime < 0.0f)
-			WaterJumpTime = 0.0f;
 		return;
 	}
 
@@ -799,7 +861,15 @@ void QMovement::JumpButton()
 	{
 		bOnGround   = false;
 		OnGroundEnt = -1;
-		Velocity.Z  = 100.0f;
+		
+		int32 Cont = PointContents(Origin);
+		if (Cont == -4) // CONTENTS_SLIME
+			Velocity.Z = 80.0f;
+		else if (Cont == -5) // CONTENTS_LAVA
+			Velocity.Z = 50.0f;
+		else
+			Velocity.Z = 100.0f;
+			
 		return;
 	}
 
@@ -821,61 +891,140 @@ void QMovement::JumpButton()
 	// Inherit base velocity to gain momentum from conveyors/lifts when jumping!
 	Velocity += BaseVelocity;
 
+	PreventMegaBunnyJumping();
+
 	// Perform the jump natively
 	Velocity.Z = Sv_JumpSpeed;
+
+	// Decay it for simulation
+	FixupGravityVelocity();
 
 	JumpCount++;
 	OldButtons |= BUTTON_JUMP;
 }
 
 // ============================================================================
-// DuckButton
+// UnDuck
 // ============================================================================
-void QMovement::DuckButton()
+void QMovement::UnDuck()
 {
-	bool bWantsCrouch = (Cmd.Buttons & BUTTON_DUCK) != 0;
+	const float Diff = PlayerMaxs.Z - Sv_CapsuleHalfHeightCrouch;
+	
+	// Case 1: On ground (or near ground). Try shifting head UP.
+	FVector NewOrigin = Origin;
+	NewOrigin.Z += Diff;
 
-	if (bWantsCrouch && !bIsCrouching)
+	Sv_CapsuleHalfHeight = PlayerMaxs.Z;
+	FQMoveTrace Trace = PlayerMoveTrace(NewOrigin, NewOrigin);
+
+	if (!Trace.bStartSolid && !Trace.bAllSolid)
 	{
-		bIsCrouching = true;
-
-		float HullOffset = PlayerMaxs.Z - Sv_CapsuleHalfHeightCrouch;
-		Sv_CapsuleHalfHeight = Sv_CapsuleHalfHeightCrouch;
-
-		if (bOnGround)
-		{
-			// Keep feet on ground when shrinking
-			Origin.Z -= HullOffset;
-		}
+		bIsCrouching = false;
+		bInDuck = false;
+		flDuckTime = 0;
+		Origin = NewOrigin;
+		ViewOffset.Z = 22.0f;
+		CategorizePosition();
+		return;
 	}
-	else if (!bWantsCrouch && bIsCrouching)
+
+	// Case 2: In air. Try expanding from center (Leg tuck release).
+	// This matches GoldSrc PM_UnDuck logic where origin doesn't shift in air.
+	NewOrigin = Origin;
+	Trace = PlayerMoveTrace(NewOrigin, NewOrigin);
+
+	if (!Trace.bStartSolid && !Trace.bAllSolid)
 	{
-		float HullOffset = PlayerMaxs.Z - Sv_CapsuleHalfHeightCrouch;
-		FVector TestPos = Origin;
-		
-		if (bOnGround)
+		bIsCrouching = false;
+		bInDuck = false;
+		flDuckTime = 0;
+		Origin = NewOrigin;
+		ViewOffset.Z = Sv_ViewHeight;
+		CategorizePosition();
+		return;
+	}
+
+	// Still stuck? Stay crouched.
+	Sv_CapsuleHalfHeight = Sv_CapsuleHalfHeightCrouch;
+	ViewOffset.Z = Sv_ViewHeightCrouch;
+}
+
+void QMovement::Duck()
+{
+	int32 ButtonsChanged = (OldButtons ^ Cmd.Buttons);
+	int32 ButtonPressed = ButtonsChanged & Cmd.Buttons;
+
+	if (flDuckTime > 0)
+	{
+		flDuckTime -= (int32)(FrameTime * 1000.0f);
+		if (flDuckTime < 0) flDuckTime = 0;
+	}
+
+	if (bDead)
+	{
+		if (bIsCrouching)
 		{
-			// If we stand up on the ground, our center must move up
-			TestPos.Z += HullOffset;
+			UnDuck();
 		}
+		return;
+	}
 
-		// Temporary bump hull size to full back up to test
-		float OldFullHeight = Sv_CapsuleHalfHeight;
-		Sv_CapsuleHalfHeight = PlayerMaxs.Z;
-		
-		FQMoveTrace Tr = PlayerMoveTrace(TestPos, TestPos);
+	if (bIsCrouching)
+	{
+		Cmd.ForwardMove *= PLAYER_DUCKING_MULTIPLIER;
+		Cmd.SideMove    *= PLAYER_DUCKING_MULTIPLIER;
+		Cmd.UpMove      *= PLAYER_DUCKING_MULTIPLIER;
+	}
 
-		if (!Tr.bStartSolid && !Tr.bAllSolid)
+	if ((Cmd.Buttons & BUTTON_DUCK) || bInDuck || bIsCrouching)
+	{
+		if (Cmd.Buttons & BUTTON_DUCK)
 		{
-			// Safe to stand up
-			bIsCrouching = false;
-			Origin = TestPos;
+			// START DUCKING
+			if ((ButtonPressed & BUTTON_DUCK) && !bIsCrouching && !bInDuck)
+			{
+				flDuckTime = 1000;
+				bInDuck = true;
+			}
+
+			float Time = FMath::Max(0.0f, (1.0f - (float)flDuckTime / 1000.0f));
+
+			if (bInDuck)
+			{
+				const float Diff = PlayerMaxs.Z - Sv_CapsuleHalfHeightCrouch;
+
+				// Finish ducking immediately if in air, or after TIME_TO_DUCK on ground
+				if (!bOnGround || (Time >= TIME_TO_DUCK))
+				{
+					bInDuck = false;
+					bIsCrouching = true;
+					ViewOffset.Z = Sv_ViewHeightCrouch;
+					
+					// Physics shift (hull and origin) happens NOW
+					Sv_CapsuleHalfHeight = Sv_CapsuleHalfHeightCrouch;
+					if (bOnGround)
+					{
+						Origin.Z -= Diff;
+						CategorizePosition();
+					}
+				}
+				else
+				{
+					// Spline view down while still in stand hull
+					float DuckFraction = SplineFraction(Time, (1.0f / TIME_TO_DUCK));
+					// Goes from StandView down to CrouchView-Relative-To-StandOrigin
+					ViewOffset.Z = (Sv_ViewHeight * (1.0f - DuckFraction)) + ((Sv_ViewHeightCrouch - Diff) * DuckFraction);
+				}
+			}
+			else if (bIsCrouching)
+			{
+				ViewOffset.Z = Sv_ViewHeightCrouch;
+			}
 		}
 		else
 		{
-			// Stuck under roof, force crouch back on
-			Cmd.Buttons |= BUTTON_DUCK;
-			Sv_CapsuleHalfHeight = OldFullHeight; // revert test trace
+			// TRY TO UNDUCK
+			UnDuck();
 		}
 	}
 }
@@ -889,6 +1038,10 @@ void QMovement::CheckWaterJump()
 		return;
 
 	if (Velocity.Z < -Sv_MaxGroundUpVel)
+		return;
+
+	// Require player to be actively trying to move forward
+	if (Cmd.ForwardMove <= 0.0f)
 		return;
 
 	FVector FlatForward = Forward;
@@ -907,7 +1060,7 @@ void QMovement::CheckWaterJump()
 		return;
 
 	Velocity = FlatForward * 50.0f;
-	Velocity.Z = 310.0f;
+	Velocity.Z = 225.0f; // Authentic GoldSrc Z velocity for water jump
 	WaterJumpTime = 2.0f;
 	OldButtons |= BUTTON_JUMP;
 }
@@ -917,6 +1070,15 @@ void QMovement::CheckWaterJump()
 // ============================================================================
 void QMovement::NudgePosition()
 {
+	// Only try to unstick if actually stuck
+	// We shrink the capsule by 0.5f to ensure flush wall contacts (surfing) 
+	// are NOT misidentified as "stuck" by the overlap sweep!
+	if (TestPlayerPosition(Origin, 0.5f))
+	{
+		// Position is valid, we are not stuck. Skip nudging.
+		return;
+	}
+
 	const FVector Base = Origin;
 
 	for (int32 i = 0; i < 3; i++)
@@ -924,23 +1086,19 @@ void QMovement::NudgePosition()
 		Origin[i] = FMath::FloorToFloat(Origin[i] * 8.0f) * 0.125f;
 	}
 
-	static const int32 Sign[3] = { 0, -1, 1 };
+	FVector TestOffset;
 
-	for (int32 z = 0; z <= 2; z++)
+	for (int32 i = 0; i < 54; i++)
 	{
-		for (int32 x = 0; x <= 2; x++)
-		{
-			for (int32 y = 0; y <= 2; y++)
-			{
-				Origin.X = Base.X + (Sign[x] * 1.0f / 8.0f);
-				Origin.Y = Base.Y + (Sign[y] * 1.0f / 8.0f);
-				Origin.Z = Base.Z + (Sign[z] * 1.0f / 8.0f);
-				if (TestPlayerPosition(Origin))
-					return;
-			}
-		}
+		GetRandomStuckOffsets(TestOffset);
+		
+		Origin = Base + TestOffset;
+		if (TestPlayerPosition(Origin, 0.5f))
+			return; // Found a VALID (non-solid) position!
 	}
 
+	// If we failed to find an offset, revert and try old basic tests if absolutely necessary, 
+	// but Valve just reverts to base
 	Origin = Base;
 }
 
@@ -1054,8 +1212,17 @@ void QMovement::ResolveOverlaps()
 			FMTDResult MTD;
 			if (Comp->ComputePenetration(MTD, Shape, Origin, FQuat::Identity))
 			{
-				// Do not push out of water or ladders (even if they are misconfigured to block)
 				AActor* HitActor = Comp->GetOwner();
+				
+				// GoldSrc Fix: Do not push out of other players.
+				// This prevents players from "repelling" each other like magnets.
+				// They will instead block each other solidly via SweepSingle.
+				if (HitActor && HitActor->ActorHasTag(FName("Player")))
+				{
+					continue;
+				}
+
+				// Do not push out of water or ladders (even if they are misconfigured to block)
 				if (HitActor && (HitActor->ActorHasTag("Water") || HitActor->ActorHasTag("Ladder") || 
 								 HitActor->ActorHasTag("Slime") || HitActor->ActorHasTag("Lava")))
 				{
@@ -1089,6 +1256,31 @@ void QMovement::AddBaseVelocity()
 }
 
 // ============================================================================
+// AddCorrectGravity
+// ============================================================================
+void QMovement::AddCorrectGravity()
+{
+	if (WaterJumpTime > 0.0f)
+		return;
+
+	Velocity.Z -= (Sv_EntGravity * Sv_Gravity * 0.5f * FrameTime);
+	
+	CheckVelocity();
+}
+
+// ============================================================================
+// FixupGravityVelocity
+// ============================================================================
+void QMovement::FixupGravityVelocity()
+{
+	if (WaterJumpTime > 0.0f)
+		return;
+
+	Velocity.Z -= (Sv_EntGravity * Sv_Gravity * FrameTime * 0.5f);
+	CheckVelocity();
+}
+
+// ============================================================================
 // ProcessMovement — main entry point, replaces PlayerMove()
 // ============================================================================
 void QMovement::ProcessMovement(float DeltaTime, UWorld* World, const UMovementSettings* Settings, AActor* Owner)
@@ -1111,9 +1303,13 @@ void QMovement::ProcessMovement(float DeltaTime, UWorld* World, const UMovementS
 	if (bIsCrouching)
 	{
 		Sv_CapsuleHalfHeight = Sv_CapsuleHalfHeightCrouch;
-		// Re-derive mins/maxs so PointContents foot-level checks use the correct Z
 		PlayerMins.Z = -Sv_CapsuleHalfHeight;
-		// NOTE: PlayerMaxs.Z stays at full height — DuckButton needs it for uncrouch offset
+	}
+	else
+	{
+		Sv_CapsuleHalfHeight = PlayerMaxs.Z;
+		PlayerMins.Z = -Sv_CapsuleHalfHeight;
+		ViewOffset.Z = Sv_ViewHeight; // VEC_VIEW
 	}
 
 	ComputeViewVectors();
@@ -1132,22 +1328,39 @@ void QMovement::ProcessMovement(float DeltaTime, UWorld* World, const UMovementS
 	// Set onground, watertype, and waterlevel
 	CategorizePosition();
 
+	if (!bOnGround)
+	{
+		FallVelocity = -Velocity.Z;
+	}
+
 	if (WaterLevel == 2)
 		CheckWaterJump();
 
 	if (Velocity.Z < 0.0f)
 		WaterJumpTime = 0.0f;
 
-	DuckButton();
+	if (WaterJumpTime > 0.0f)
+	{
+		WaterJumpTime -= FrameTime;
+		if (WaterJumpTime < 0.0f)
+			WaterJumpTime = 0.0f;
+	}
+
+	if (WaterLevel < 2)
+	{
+		AddCorrectGravity();
+	}
+
+	Duck();
 
 	if (Cmd.Buttons & BUTTON_JUMP)
-		JumpButton();
+		Jump();
 	else
 		OldButtons &= ~BUTTON_JUMP;
 
 	CheckVelocity();
 
-	ApplyFriction();
+	Friction();
 
 	if (WaterLevel == 4)
 	{
@@ -1164,34 +1377,37 @@ void QMovement::ProcessMovement(float DeltaTime, UWorld* World, const UMovementS
 		// Get or cache the ladder wall normal
 		if (!bHasLadderNormal)
 		{
-			// Find the wall behind the ladder using a LINE TRACE at waist height.
-			// A capsule sweep would clip the floor edge and return a floor normal!
-			FVector FlatFwd = Forward;
-			FlatFwd.Z = 0.0f;
-			FlatFwd.Normalize();
+			FVector FlatFwd = Forward; FlatFwd.Z = 0.0f; FlatFwd.Normalize();
+			FVector FlatRgt = Right;   FlatRgt.Z = 0.0f; FlatRgt.Normalize();
+			
+			FVector Dirs[4] = { FlatFwd, -FlatFwd, FlatRgt, -FlatRgt };
+			float ClosestDist = 9999.0f;
+			FVector BestNormal = -FlatFwd; // fallback
+			bool bAnyWall = false;
 
-			FHitResult WallHit;
 			FCollisionQueryParams WallParams;
 			if (OwnerActor) WallParams.AddIgnoredActor(OwnerActor);
 
-			const bool bWallFound = WorldPtr->LineTraceSingleByChannel(
-				WallHit,
-				Origin,
-				Origin + FlatFwd * 64.0f,
-				ECC_Pawn,
-				WallParams
-			);
+			for (int32 i = 0; i < 4; i++)
+			{
+				FHitResult WallHit;
+				const bool bTrace = WorldPtr->LineTraceSingleByChannel(
+					WallHit, Origin, Origin + Dirs[i] * 64.0f, ECC_Pawn, WallParams
+				);
 
-			if (bWallFound && WallHit.ImpactNormal.Z < 0.5f) // Must be a wall, not a floor
-			{
-				CachedLadderNormal = WallHit.ImpactNormal;
-				bHasLadderNormal = true;
+				if (bTrace && WallHit.ImpactNormal.Z < 0.5f)
+				{
+					if (WallHit.Distance < ClosestDist)
+					{
+						ClosestDist = WallHit.Distance;
+						BestNormal = WallHit.ImpactNormal;
+						bAnyWall = true;
+					}
+				}
 			}
-			else
-			{
-				CachedLadderNormal = -FlatFwd;
-				bHasLadderNormal = true;
-			}
+
+			CachedLadderNormal = BestNormal;
+			bHasLadderNormal = true;
 		}
 
 		const FVector& LadderNormal = CachedLadderNormal;
@@ -1241,7 +1457,7 @@ void QMovement::ProcessMovement(float DeltaTime, UWorld* World, const UMovementS
 
 		// UE5-specific: nudge player off the floor so FlyMove can move upward.
 		// Valve's MOVETYPE_FLY bypassed floor collision internally; UE5 sweeps cannot.
-		if (bOnFloor)
+		if (bOnFloor && Velocity.Z > 0.0f)
 		{
 			Origin.Z += 2.0f;
 			bOnGround = false;
@@ -1257,7 +1473,23 @@ void QMovement::ProcessMovement(float DeltaTime, UWorld* World, const UMovementS
 		if (WaterLevel >= 2)
 			WaterMove();
 		else
+			// Regular movement (walk or fly)
 			AirMove();
+	}
+
+	CheckVelocity();
+
+	DropPunchAngle();
+
+	if (WaterJumpTime > 0.0f)
+	{
+		// While water jumping, Valve handles gravity directly in PM_AirMove
+		// Since we manage gravity globally outside AirMove, we simulate it here explicitly
+		Velocity.Z -= Sv_EntGravity * Sv_Gravity * FrameTime;
+	}
+	else if (WaterLevel < 2)
+	{
+		FixupGravityVelocity();
 	}
 
 	// Set onground, watertype, and waterlevel for final spot
@@ -1275,4 +1507,136 @@ void QMovement::ProcessMovement(float DeltaTime, UWorld* World, const UMovementS
 			bOnGround  = false;
 		}
 	}
+
+	// Calculate View Roll
+	// Assuming 0.65 as default rollangle and 300.0 as default rollspeed based on HL/CS
+	CalcRoll(ViewAngles, Velocity, 0.65f, 300.0f);
+
+	// Calculate View Bobbing
+	if (Sv_EnableBobbing && bOnGround)
+	{
+		float HorizontalSpeed = FMath::Sqrt(Velocity.X * Velocity.X + Velocity.Y * Velocity.Y);
+		if (HorizontalSpeed > 10.0f)
+		{
+			BobCycle += HorizontalSpeed * Sv_BobSpeed * FrameTime * 0.01f;
+			float BobValue = FMath::Sin(BobCycle) * Sv_BobAmount * HorizontalSpeed;
+			
+			// Apply vertical bobbing
+			ViewOffset.Z += BobValue * Sv_BobUp;
+		}
+		else
+		{
+			// Fade out bobbing when slow
+			BobCycle = 0.0f;
+		}
+	}
+
+	// Final step: update old buttons for next frame
+	OldButtons = Cmd.Buttons;
+}
+
+// ============================================================================
+// CalcRoll — calculate camera lean based on lateral velocity (strafing)
+// ============================================================================
+void QMovement::CalcRoll(const FVector& Angles, const FVector& Vel, float RollAngle, float RollSpeed)
+{
+	if (!Sv_EnableCameraRoll)
+	{
+		ViewRoll = 0.0f;
+		return;
+	}
+	
+	FVector Fwd = Forward;
+	FVector Rht = Right;
+	FVector U = Up;
+
+	float Side = FVector::DotProduct(Vel, Rht);
+	float Sign = Side < 0 ? -1.0f : 1.0f;
+	Side = FMath::Abs(Side);
+	float Value = RollAngle;
+
+	if (Side < RollSpeed)
+	{
+		Side = Side * Value / RollSpeed;
+	}
+	else
+	{
+		Side = Value;
+	}
+
+	// We apply a multiplier of 4.0 like pm_shared.c
+	ViewRoll = Side * Sign * 4.0f;
+}
+
+// ============================================================================
+// SplineFraction — ease-in, ease-out style interpolation for ducking
+// ============================================================================
+float QMovement::SplineFraction(float Value, float Scale)
+{
+	Value = Scale * Value;
+	float ValueSquared = Value * Value;
+	return 3.0f * ValueSquared - 2.0f * ValueSquared * Value;
+}
+
+// ============================================================================
+// CheckFalling — apply landing punch based on fall velocity
+// ============================================================================
+void QMovement::CheckFalling()
+{
+	if (!Sv_EnableCameraPunch)
+		return;
+
+	if (bDead || FallVelocity < 350.0f) // PLAYER_FALL_PUNCH_THRESHHOLD
+	{
+		FallVelocity = 0.0f;
+		return;
+	}
+
+	if (WaterLevel > 0)
+	{
+		// Landed in water, no punch
+	}
+	else
+	{
+		float fVol = 0.5f;
+		if (FallVelocity > 580.0f) // PLAYER_MAX_SAFE_FALL_SPEED
+		{
+			fVol = 1.0f;
+		}
+		else if (FallVelocity > 290.0f) // PLAYER_MAX_SAFE_FALL_SPEED / 2
+		{
+			fVol = 0.85f;
+		}
+		
+		if (fVol > 0.0f)
+		{
+			// Knock the screen around a little bit, temporary effect
+			PunchAngle.X = FallVelocity * 0.013f; // Pitch down axis
+			if (PunchAngle.X > 8.0f)
+			{
+				PunchAngle.X = 8.0f;
+			}
+		}
+	}
+
+	FallVelocity = 0.0f;
+}
+
+// ============================================================================
+// DropPunchAngle — decay the procedural punch over time
+// ============================================================================
+void QMovement::DropPunchAngle()
+{
+	float Len = PunchAngle.Size();
+	if (Len <= SMALL_NUMBER)
+	{
+		PunchAngle = FVector::ZeroVector;
+		return;
+	}
+	
+	Len -= (10.0f + Len * 0.5f) * FrameTime;
+	Len = FMath::Max(Len, 0.0f);
+	
+	PunchAngle.Normalize();
+	PunchAngle *= Len;
 }

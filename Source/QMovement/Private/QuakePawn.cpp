@@ -26,6 +26,9 @@ AQuakePawn::AQuakePawn()
 	CapsuleComp->SetEnableGravity(false);
 	SetRootComponent(CapsuleComp);
 
+	// Add Player tag for collision filtering in QMovement
+	Tags.Add(FName("Player"));
+
 	// Camera at eye height (Quake viewheight = 22 from hull center)
 	CameraComp = CreateDefaultSubobject<UCameraComponent>(TEXT("CameraComp"));
 	CameraComp->SetupAttachment(CapsuleComp);
@@ -102,8 +105,17 @@ void AQuakePawn::Tick(float DeltaTime)
 
 	CapsuleComp->SetCapsuleSize(CurrentRadius, CurrentHalfHeight, false);
 
-	// Update camera rotation to match view angles
-	CameraComp->SetWorldRotation(ControlRot);
+	// Update camera rotation to match view angles + apply landing punch and strafe roll
+	FRotator FinalRot = ControlRot;
+	FinalRot.Pitch -= MoveEngine.PunchAngle.X; // Pitch down on landing punch
+	FinalRot.Roll  += MoveEngine.ViewRoll;     // Strafe lean
+	CameraComp->SetWorldRotation(FinalRot);
+
+	// Smoothly interpolate the camera location based on CS 1.6 duck fraction
+	// VEC_VIEW is 28.0 in HL. Our original local default was 22.0. So offset by -6.0.
+	FVector CamLoc = CameraComp->GetRelativeLocation();
+	CamLoc.Z = MoveEngine.ViewOffset.Z - 6.0f;
+	CameraComp->SetRelativeLocation(CamLoc);
 
 	// --- Debug: show speed on screen ---
 	if (bShowDebugSpeed)
@@ -247,6 +259,7 @@ void AQuakePawn::OnDuckReleased(const FInputActionValue& /*Value*/)
 #define SV_CMD(Name, Field) \
 void AQuakePawn::Name(const FString& Args) \
 { \
+	if (!HasAuthority()) return; \
 	const FString Trimmed = Args.TrimStartAndEnd(); \
 	if (Trimmed.IsEmpty()) \
 	{ \
@@ -278,6 +291,8 @@ SV_CMD(sv_maxvelocity, MaxVelocity)
 
 void AQuakePawn::sv_autobhop(const FString& Args)
 {
+	if (!HasAuthority()) return;
+
 	const FString Trimmed = Args.TrimStartAndEnd();
 	if (Trimmed.IsEmpty())
 	{
@@ -291,6 +306,84 @@ void AQuakePawn::sv_autobhop(const FString& Args)
 		if (MovementSettings) { MovementSettings->bAutoBunnyHop = Value; }
 		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan,
 			FString::Printf(TEXT("sv_autobhop = %d"), Value ? 1 : 0));
+	}
+}
+
+void AQuakePawn::sv_disablebhopcap(const FString& Args)
+{
+	if (!HasAuthority()) return;
+
+	const FString Trimmed = Args.TrimStartAndEnd();
+	if (Trimmed.IsEmpty())
+	{
+		const bool Current = MovementSettings ? MovementSettings->bDisableBhopCap : true;
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan,
+			FString::Printf(TEXT("sv_disablebhopcap is \"%d\""), Current ? 1 : 0));
+	}
+	else
+	{
+		const bool Value = (FCString::Atoi(*Trimmed) != 0);
+		if (MovementSettings) { MovementSettings->bDisableBhopCap = Value; }
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan,
+			FString::Printf(TEXT("sv_disablebhopcap = %d"), Value ? 1 : 0));
+	}
+}
+
+void AQuakePawn::sv_camerapunch(const FString& Args)
+{
+	if (!HasAuthority()) return;
+
+	const FString Trimmed = Args.TrimStartAndEnd();
+	if (Trimmed.IsEmpty())
+	{
+		const bool Current = MovementSettings ? MovementSettings->bEnableCameraPunch : true;
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan,
+			FString::Printf(TEXT("sv_camerapunch is \"%d\""), Current ? 1 : 0));
+	}
+	else
+	{
+		const bool Value = (FCString::Atoi(*Trimmed) != 0);
+		if (MovementSettings) { MovementSettings->bEnableCameraPunch = Value; }
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan,
+			FString::Printf(TEXT("sv_camerapunch = %d"), Value ? 1 : 0));
+	}
+}
+
+void AQuakePawn::sv_cameraroll(const FString& Args)
+{
+	if (!HasAuthority()) return;
+
+	const FString Trimmed = Args.TrimStartAndEnd();
+	if (Trimmed.IsEmpty())
+	{
+		const bool Current = MovementSettings ? MovementSettings->bEnableCameraRoll : true;
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan,
+			FString::Printf(TEXT("sv_cameraroll is \"%d\""), Current ? 1 : 0));
+	}
+	else
+	{
+		const bool Value = (FCString::Atoi(*Trimmed) != 0);
+		if (MovementSettings) { MovementSettings->bEnableCameraRoll = Value; }
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan,
+			FString::Printf(TEXT("sv_cameraroll = %d"), Value ? 1 : 0));
+	}
+}
+
+void AQuakePawn::cl_bob(const FString& Args)
+{
+	const FString Trimmed = Args.TrimStartAndEnd();
+	if (Trimmed.IsEmpty())
+	{
+		const bool Current = MovementSettings ? MovementSettings->bEnableBobbing : true;
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan,
+			FString::Printf(TEXT("cl_bob is \"%d\""), Current ? 1 : 0));
+	}
+	else
+	{
+		const bool Value = (FCString::Atoi(*Trimmed) != 0);
+		if (MovementSettings) { MovementSettings->bEnableBobbing = Value; }
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan,
+			FString::Printf(TEXT("cl_bob = %d"), Value ? 1 : 0));
 	}
 }
 

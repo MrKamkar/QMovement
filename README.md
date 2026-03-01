@@ -9,7 +9,10 @@ It fully supports classic mechanics without compromises:
 - Bunnyhopping (Bhop)
 - Strafe-jumping and Air-strafing
 - Surfing (sliding on curved walls)
-- Ladder climbing and ramp trajectories
+- Ladder climbing and orientation-independent jump-off
+- **Crouch-Jumping (Duck-Jump)** with authentic mid-air origin behavior
+- **Delayed Ground Crouching** (TIME_TO_DUCK) matching GoldSrc delay
+- Fully data-driven view heights and physics parameters
 
 ## ⚠️ Important Prerequisite (For Blueprint-Only Projects)
 
@@ -90,7 +93,7 @@ This plugin is open for community improvements! If you want to contribute (e.g.,
 
 1. **Fork:** Click the `Fork` button at the top right of the main GitHub repository. This creates your own copy.
 2. **Clone:** Download your forked version to your PC:
-   `git clone https://github.com/YourName/QMovement.git`
+   `git clone https://github.com/MrKamkar/BH_Quake.git`
 3. **Create a Branch:** Start working on a separate branch to keep things organized:
    `git checkout -b feature-new-walljump`
 4. **Code:** Make your C++ modifications, compile, and test in Unreal Engine.
@@ -100,3 +103,7 @@ This plugin is open for community improvements! If you want to contribute (e.g.,
 6. **Push:**
    `git push origin feature-new-walljump`
 7. **Pull Request (PR):** Go back to the official **main** repository page and click the green `Compare & pull request` button. Briefly describe what your change does. We will review the code and merge it!
+
+---
+
+**Developed by MrKamkar** | [GitHub Profile](https://github.com/MrKamkar) | [Project Repository](https://github.com/MrKamkar/BH_Quake)
