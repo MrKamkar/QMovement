@@ -11,14 +11,29 @@ It fully supports classic mechanics without compromises:
 - Surfing (sliding on curved walls)
 - Ladder climbing and ramp trajectories
 
-## 🚀 Installation
+## ⚠️ Important Prerequisite (For Blueprint-Only Projects)
 
-1. Copy or clone this `QMovement` folder directly into the `Plugins` directory of your Unreal Engine project. The final path should look like this:
-   `[YourProject]/Plugins/QMovement/`
-   _(If the `Plugins` folder doesn't exist in your project, simply create it)._
-2. Right-click on your project's `.uproject` file and select **Generate Visual Studio project files**.
-3. Open the generated Solution (`.sln`) file and `Build` the project in Visual Studio or Rider.
-4. Open the project in Unreal Engine 5 and ensure the plugin is enabled (_Edit -> Plugins_, search for "QMovement").
+If your project was created strictly as a Blueprint project and does not have a `Source` folder, Unreal Engine will block you from compiling new Plugins with the error: _"This project does not have any source code"_.
+
+**To quickly convert your project to support C++ Plugins:**
+
+1. Open your project normally in Unreal Engine Editor.
+2. Go to **Tools** (or **File** in older versions) at the top -> **New C++ Class...**
+3. Choose `None` (or `Actor`), click **Next**, and then **Create Class**.
+4. The Engine will generate a Source folder and automatically open Visual Studio.
+5. Close Visual Studio and Unreal Engine. You are now ready to install the plugin below!
+
+## 🚀 Installation (ZIP Method)
+
+1. Click the green `Code` button at the top of this repository and select **Download ZIP**.
+2. Extract the downloaded ZIP file. Rename the extracted folder from `QMovement-main` to strictly **`QMovement`**.
+3. Go to your Unreal Engine project's main directory (where your `.uproject` file is located).
+4. Create a new folder named **`Plugins`** there (if you don't already have one).
+5. Paste your extracted `QMovement` folder inside the `Plugins` folder. _(Your path should look like: `YourGame/Plugins/QMovement/`)_.
+6. Right-click on your project's `.uproject` file (e.g., `YourGame.uproject`) and select **Generate Visual Studio project files**.
+   _(This step is crucial! It forces the engine to link your Blueprint project with this C++ plugin)._
+7. Open the generated `.sln` file and `Build` the project in Visual Studio. **Alternatively**, just open the project in Unreal Editor 5 — the engine will prompt: _"Missing Modules. Would you like to rebuild them now?"_. Click **Yes**.
+8. Wait for the background compilation to finish. Once the Editor opens, the plugin is ready to go! (Ensure it is enabled under _Edit -> Plugins_).
 
 ## 🎮 Usage Guide
 
@@ -46,7 +61,7 @@ In Unreal Engine:
 3. Name and open the new file. This is your control panel for all movement physics.
 4. Assign this created Data Asset to the `Movement Settings` slot inside your Player Blueprint.
 
-_Note: Default properties perfectly match original QuakeWorld values. If you do not assign a Data Asset, the engine will automatically use defaults known from CS 1.6._
+_Note: Default properties perfectly match original QuakeWorld values. If you do not assign a Data Asset, the engine will automatically use defaults known from Quake._
 
 ---
 
